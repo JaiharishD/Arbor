@@ -1,0 +1,970 @@
+import React, { useState, useMemo } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
+    TextInput,
+    Modal,
+    KeyboardAvoidingView,
+    Platform,
+} from 'react-native';
+import { ChevronUp, ChevronDown, MessageCircle, X, Send, Plus, Award, Pin, TrendingUp } from 'lucide-react-native';
+import { useApp } from '../context/AppContext';
+import { type Comment, type Flair } from '../types';
+import ImageGallery from './ImageGallery';
+
+interface CommunityScreenProps {
+    onNavigate?: (screen: 'chat') => void;
+}
+
+export default function CommunityScreen({ onNavigate }: CommunityScreenProps) {
+    const { colors, communityPosts, upvotePost, downvotePost, addComment, upvoteComment, downvoteComment, awardPost, userName, createPost, sortBy, setSortBy, addReaction, addCommentReaction } = useApp();
+    const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
+    const [commentText, setCommentText] = useState('');
+    const [replyingTo, setReplyingTo] = useState<string | null>(null);
+    const [showCreatePost, setShowCreatePost] = useState(false);
+    const [showAwardModal, setShowAwardModal] = useState(false);
+    const [selectedPostForAward, setSelectedPostForAward] = useState<number | null>(null);
+    const [newPostText, setNewPostText] = useState('');
+    const [showReactionPicker, setShowReactionPicker] = useState<{ postId?: number, commentId?: string } | null>(null);
+
+    const sortedPosts = useMemo(() => {
+        const posts = [...communityPosts];
+        switch (sortBy) {
+            case 'new':
+                return posts.sort((a, b) => b.id - a.id);
+            case 'top':
+                return posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+            case 'hot':
+            default:
+                // Hot = combination of score and recency
+                return posts.sort((a, b) => {
+                    const scoreA = a.upvotes - a.downvotes;
+                    const scoreB = b.upvotes - b.downvotes;
+                    return scoreB - scoreA;
+                });
+        }
+    }, [communityPosts, sortBy]);
+
+    const handleUpvote = (postId: number) => {
+        upvotePost(postId);
+    };
+
+    const handleDownvote = (postId: number) => {
+        downvotePost(postId);
+    };
+
+    const handleToggleComments = (postId: number) => {
+        setExpandedPostId(expandedPostId === postId ? null : postId);
+        setCommentText('');
+        setReplyingTo(null);
+    };
+
+    const handleAddComment = (postId: number) => {
+        if (commentText.trim()) {
+            addComment(postId, commentText.trim(), replyingTo || undefined);
+            setCommentText('');
+            setReplyingTo(null);
+        }
+    };
+
+    const handleCreatePost = () => {
+        if (newPostText.trim()) {
+            createPost(newPostText.trim());
+            setNewPostText('');
+            setShowCreatePost(false);
+        }
+    };
+
+    const handleAward = (award: string) => {
+        if (selectedPostForAward) {
+            awardPost(selectedPostForAward, award);
+            setShowAwardModal(false);
+            setSelectedPostForAward(null);
+        }
+    };
+
+    const isPostUpvotedByUser = (post: any) => userName && post.upvotedBy.includes(userName);
+    const isPostDownvotedByUser = (post: any) => userName && post.downvotedBy.includes(userName);
+    const isCommentUpvotedByUser = (comment: Comment) => userName && comment.upvotedBy.includes(userName);
+    const isCommentDownvotedByUser = (comment: Comment) => userName && comment.downvotedBy.includes(userName);
+
+    const getScore = (upvotes: number, downvotes: number) => {
+        const score = upvotes - downvotes;
+        if (score >= 1000) return `${(score / 1000).toFixed(1)}k`;
+        return score.toString();
+    };
+
+    const renderComment = (comment: Comment, postId: number, depth: number = 0) => {
+        const isUpvoted = isCommentUpvotedByUser(comment);
+        const isDownvoted = isCommentDownvotedByUser(comment);
+        const score = comment.upvotes - comment.downvotes;
+
+        return (
+            <View key={comment.id} style={[styles.commentWrapper, depth > 0 && styles.nestedComment]}>
+                <View style={styles.commentVoteBar} />
+                <View style={styles.commentContainer}>
+                    <View style={styles.commentHeader}>
+                        <Text style={styles.commentAvatar}>{comment.avatar}</Text>
+                        <Text style={[styles.commentUser, { color: colors.text }]}>{comment.user}</Text>
+                        <Text style={[styles.commentDot, { color: colors.textSecondary }]}>•</Text>
+                        <Text style={[styles.commentTime, { color: colors.textSecondary }]}>{comment.timestamp}</Text>
+                    </View>
+                    <Text style={[styles.commentText, { color: colors.textSecondary }]}>{comment.text}</Text>
+                    <View style={styles.commentActions}>
+                        <TouchableOpacity
+                            style={styles.commentVoteButton}
+                            onPress={() => upvoteComment(postId, comment.id)}
+                        >
+                            <ChevronUp size={14} color={isUpvoted ? '#16a34a' : colors.textSecondary} />
+                        </TouchableOpacity>
+                        <Text style={[styles.commentScore, { color: score > 0 ? '#16a34a' : score < 0 ? '#10b981' : colors.textSecondary }]}>
+                            {score}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.commentVoteButton}
+                            onPress={() => downvoteComment(postId, comment.id)}
+                        >
+                            <ChevronDown size={14} color={isDownvoted ? '#10b981' : colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.replyButton}
+                            onPress={() => setReplyingTo(comment.id)}
+                        >
+                            <Text style={[styles.replyText, { color: colors.textSecondary }]}>Reply</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {replyingTo === comment.id && (
+                        <View style={styles.replyInputContainer}>
+                            <TextInput
+                                style={[styles.replyInput, {
+                                    backgroundColor: colors.background,
+                                    color: colors.text,
+                                    borderColor: colors.border
+                                }]}
+                                placeholder="Write a reply..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={commentText}
+                                onChangeText={setCommentText}
+                                multiline
+                                autoFocus
+                            />
+                            <View style={styles.replyActions}>
+                                <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                                    <Text style={[styles.cancelButton, { color: colors.textSecondary }]}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.replySubmitButton, {
+                                        backgroundColor: commentText.trim() ? '#16a34a' : colors.border
+                                    }]}
+                                    onPress={() => handleAddComment(postId)}
+                                    {/* Sort Bar */}
+            <View style={[styles.sortBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                                    <TouchableOpacity
+                                        style={[styles.sortButton, sortBy === 'hot' && styles.sortButtonActive]}
+                                        onPress={() => setSortBy('hot')}
+                                    >
+                                        <Text style={[styles.sortText, sortBy === 'hot' && styles.sortTextActive]}>🔥 Hot</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.sortButton, sortBy === 'new' && styles.sortButtonActive]}
+                                        onPress={() => setSortBy('new')}
+                                    >
+                                        <Text style={[styles.sortText, sortBy === 'new' && styles.sortTextActive]}>🆕 New</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.sortButton, sortBy === 'top' && styles.sortButtonActive]}
+                                        onPress={() => setSortBy('top')}
+                                    >
+                                        <Text style={[styles.sortText, sortBy === 'top' && styles.sortTextActive]}>⭐ Top</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.askButton}
+                                        onPress={() => onNavigate?.('chat')}
+                                    >
+                                        <Text style={styles.askButtonText}>🤖 Ask Bot</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <ScrollView contentContainerStyle={styles.contentContainer}>
+                                    {sortedPosts.map(post => {
+                                        const isExpanded = expandedPostId === post.id;
+                                        const isUpvoted = isPostUpvotedByUser(post);
+                                        const isDownvoted = isPostDownvotedByUser(post);
+                                        const score = post.upvotes - post.downvotes;
+                                        const commentCount = post.comments.reduce((count, comment) => {
+                                            return count + 1 + (comment.replies?.length || 0);
+                                        }, 0);
+
+                                        return (
+                                            <View key={post.id} style={[styles.postCard, { backgroundColor: colors.card }]}>
+                                                <View style={styles.postContent}>
+                                                    {/* Vote Column */}
+                                                    <View style={styles.voteColumn}>
+                                                        <TouchableOpacity onPress={() => handleUpvote(post.id)}>
+                                                            <ChevronUp
+                                                                size={24}
+                                                                color={isUpvoted ? '#16a34a' : colors.textSecondary}
+                                                                fill={isUpvoted ? '#16a34a' : 'none'}
+                                                            />
+                                                        </TouchableOpacity>
+                                                        <Text style={[styles.score, {
+                                                            color: score > 0 ? '#16a34a' : score < 0 ? '#10b981' : colors.textSecondary
+                                                        }]}>
+                                                            {getScore(post.upvotes, post.downvotes)}
+                                                        </Text>
+                                                        <TouchableOpacity onPress={() => handleDownvote(post.id)}>
+                                                            <ChevronDown
+                                                                size={24}
+                                                                color={isDownvoted ? '#10b981' : colors.textSecondary}
+                                                                fill={isDownvoted ? '#10b981' : 'none'}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    {/* Post Content */}
+                                                    <View style={styles.postMain}>
+                                                        {/* Pinned/Trending Indicators */}
+                                                        {(post.isPinned || post.isTrending) && (
+                                                            <View style={styles.postBadges}>
+                                                                {post.isPinned && (
+                                                                    <View style={styles.pinnedBadge}>
+                                                                        <Pin size={12} color="#16a34a" />
+                                                                        <Text style={styles.pinnedText}>PINNED</Text>
+                                                                    </View>
+                                                                )}
+                                                                {post.isTrending && (
+                                                                    <View style={styles.trendingBadge}>
+                                                                        <TrendingUp size={12} color="#f59e0b" />
+                                                                        <Text style={styles.trendingText}>TRENDING</Text>
+                                                                    </View>
+                                                                )}
+                                                            </View>
+                                                        )}
+
+                                                        {/* Post Flair */}
+                                                        {post.postFlair && (
+                                                            <View style={[styles.postFlair, { backgroundColor: post.postFlair.backgroundColor }]}>
+                                                                <Text style={[styles.postFlairText, { color: post.postFlair.color }]}>
+                                                                    {post.postFlair.text}
+                                                                </Text>
+                                                            </View>
+                                                        )}
+
+                                                        <View style={styles.postHeader}>
+                                                            <Text style={styles.postAvatar}>{post.avatar}</Text>
+                                                            <Text style={[styles.postUser, { color: colors.text }]}>{post.user}</Text>
+                                                            {/* User Flair */}
+                                                            {post.userFlair && (
+                                                                <View style={[styles.userFlair, { backgroundColor: post.userFlair.backgroundColor }]}>
+                                                                    <Text style={[styles.userFlairText, { color: post.userFlair.color }]}>
+                                                                        {post.userFlair.text}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                            {post.userKarma && (
+                                                                <Text style={[styles.karma, { color: colors.textSecondary }]}>
+                                                                    • {post.userKarma} karma
+                                                                </Text>
+                                                            )}
+                                                            <Text style={[styles.postDot, { color: colors.textSecondary }]}>•</Text>
+                                                            <Text style={[styles.postTime, { color: colors.textSecondary }]}>{post.timestamp}</Text>
+                                                        </View>
+
+                                                        <Text style={[styles.postText, { color: colors.text }]}>{post.text}</Text>
+
+                                                        {/* Image Gallery */}
+                                                        {post.images && post.images.length > 0 && (
+                                                            <ImageGallery images={post.images} />
+                                                        )}
+
+                                                        {/* Reactions Bar */}
+                                                        {post.reactions && post.reactions.length > 0 && (
+                                                            <View style={styles.reactionsBar}>
+                                                                {post.reactions.slice(0, 3).map((reaction, idx) => (
+                                                                    <TouchableOpacity
+                                                                        key={idx}
+                                                                        style={[
+                                                                            styles.reactionBubble,
+                                                                            reaction.users.includes(userName) && styles.reactionBubbleActive
+                                                                        ]}
+                                                                        onPress={() => addReaction(post.id, reaction.emoji)}
+                                                                    >
+                                                                        <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                                                                        <Text style={styles.reactionCount}>{reaction.users.length}</Text>
+                                                                    </TouchableOpacity>
+                                                                ))}
+                                                                <TouchableOpacity
+                                                                    style={styles.addReactionButton}
+                                                                    onPress={() => setShowReactionPicker({ postId: post.id })}
+                                                                >
+                                                                    <Text style={styles.addReactionText}>+</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        )}
+
+                                                        {post.awards && post.awards.length > 0 && (
+                                                            <View style={styles.awards}>
+                                                                {post.awards.map((award, idx) => (
+                                                                    <Text key={idx} style={styles.awardIcon}>{award}</Text>
+                                                                ))}
+                                                            </View>
+                                                        )}
+
+                                                        <View style={styles.postActions}>
+                                                            <TouchableOpacity
+                                                                style={styles.actionButton}
+                                                                onPress={() => handleToggleComments(post.id)}
+                                                            >
+                                                                <MessageCircle size={18} color={colors.textSecondary} />
+                                                                <Text style={[styles.actionText, { color: colors.textSecondary }]}>
+                                                                    {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                            <TouchableOpacity
+                                                                style={styles.actionButton}
+                                                                onPress={() => {
+                                                                    setSelectedPostForAward(post.id);
+                                                                    setShowAwardModal(true);
+                                                                }}
+                                                            >
+                                                                <Award size={18} color={colors.textSecondary} />
+                                                                <Text style={[styles.actionText, { color: colors.textSecondary }]}>Award</Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+
+                                                        {isExpanded && (
+                                                            <View style={[styles.commentsSection, { borderTopColor: colors.border }]}>
+                                                                {commentCount === 0 ? (
+                                                                    <Text style={[styles.noComments, { color: colors.textSecondary }]}>
+                                                                        No comments yet. Be the first to comment!
+                                                                    </Text>
+                                                                ) : (
+                                                                    <View style={styles.commentsList}>
+                                                                        {post.comments.map(comment => renderComment(comment, post.id))}
+                                                                    </View>
+                                                                )}
+
+                                                                {!replyingTo && (
+                                                                    <View style={[styles.addCommentSection, { borderTopColor: colors.border }]}>
+                                                                        <TextInput
+                                                                            style={[styles.commentInput, {
+                                                                                backgroundColor: colors.background,
+                                                                                color: colors.text,
+                                                                                borderColor: colors.border
+                                                                            }]}
+                                                                            placeholder="Add a comment..."
+                                                                            placeholderTextColor={colors.textSecondary}
+                                                                            value={commentText}
+                                                                            onChangeText={setCommentText}
+                                                                            multiline
+                                                                        />
+                                                                        <TouchableOpacity
+                                                                            style={[styles.sendButton, {
+                                                                                backgroundColor: commentText.trim() ? '#16a34a' : colors.border
+                                                                            }]}
+                                                                            onPress={() => handleAddComment(post.id)}
+                                                                            disabled={!commentText.trim()}
+                                                                        >
+                                                                            <Send size={16} color="white" />
+                                                                        </TouchableOpacity>
+                                                                    </View>
+                                                                )}
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </ScrollView >
+
+                                {/* Floating Action Button */}
+                                < TouchableOpacity
+                                    style={styles.fab}
+                                    onPress={() => setShowCreatePost(true)}
+                                >
+                                    <Plus size={24} color="white" />
+                                </TouchableOpacity >
+
+                                {/* Create Post Modal */}
+                                < Modal
+                                    visible={showCreatePost}
+                                    animationType="slide"
+                                    transparent={true}
+                                    onRequestClose={() => setShowCreatePost(false)}
+                                >
+                                    <KeyboardAvoidingView
+                                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                                        style={styles.modalContainer}
+                                    >
+                                        <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+                                            <View style={styles.modalHeader}>
+                                                <Text style={[styles.modalTitle, { color: colors.text }]}>Create Post</Text>
+                                                <TouchableOpacity onPress={() => setShowCreatePost(false)}>
+                                                    <X size={24} color={colors.text} />
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            <TextInput
+                                                style={[styles.postInput, {
+                                                    backgroundColor: colors.background,
+                                                    color: colors.text,
+                                                    borderColor: colors.border
+                                                }]}
+                                                placeholder="What's on your mind?"
+                                                placeholderTextColor={colors.textSecondary}
+                                                value={newPostText}
+                                                onChangeText={setNewPostText}
+                                                multiline
+                                                autoFocus
+                                            />
+
+                                            <TouchableOpacity
+                                                style={[styles.postButton, {
+                                                    backgroundColor: newPostText.trim() ? '#16a34a' : colors.border
+                                                }]}
+                                                onPress={handleCreatePost}
+                                                disabled={!newPostText.trim()}
+                                            >
+                                                <Text style={styles.postButtonText}>Post</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </KeyboardAvoidingView>
+                                </Modal >
+
+                                {/* Award Modal */}
+                                < Modal
+                                    visible={showAwardModal}
+                                    animationType="fade"
+                                    transparent={true}
+                                    onRequestClose={() => setShowAwardModal(false)}
+                                >
+                                    <View style={styles.awardModalContainer}>
+                                        <View style={[styles.awardModalContent, { backgroundColor: colors.card }]}>
+                                            <Text style={[styles.awardModalTitle, { color: colors.text }]}>Give Award</Text>
+                                            <View style={styles.awardGrid}>
+                                                {['🏆', '🌟', '💡', '❤️', '🎉', '🔥'].map(award => (
+                                                    <TouchableOpacity
+                                                        key={award}
+                                                        style={styles.awardOption}
+                                                        onPress={() => handleAward(award)}
+                                                    >
+                                                        <Text style={styles.awardOptionIcon}>{award}</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.awardCancelButton}
+                                                onPress={() => setShowAwardModal(false)}
+                                            >
+                                                <Text style={[styles.awardCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </Modal >
+                            </View >
+                            );
+}
+
+                            const styles = StyleSheet.create({
+                                container: {
+                                flex: 1,
+                            backgroundColor: '#dae0e6',
+    },
+                            sortBar: {
+                                flexDirection: 'row',
+                            backgroundColor: 'white',
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#e5e7eb',
+                            gap: 8,
+    },
+                            sortButton: {
+                                paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+    },
+                            sortButtonActive: {
+                                backgroundColor: '#16a34a',
+    },
+                            sortText: {
+                                fontSize: 13,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+                            sortTextActive: {
+                                color: 'white',
+    },
+                            askButton: {
+                                marginLeft: 'auto',
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            backgroundColor: '#16a34a',
+    },
+                            askButtonText: {
+                                fontSize: 13,
+                            fontWeight: '600',
+                            color: 'white',
+    },
+                            contentContainer: {
+                                padding: 8,
+                            paddingBottom: 80,
+    },
+                            postCard: {
+                                backgroundColor: 'white',
+                            borderRadius: 4,
+                            marginBottom: 8,
+                            borderWidth: 1,
+                            borderColor: '#ccc',
+    },
+                            postContent: {
+                                flexDirection: 'row',
+    },
+                            voteColumn: {
+                                width: 40,
+                            alignItems: 'center',
+                            paddingTop: 8,
+                            backgroundColor: '#f8f9fa',
+                            borderTopLeftRadius: 4,
+                            borderBottomLeftRadius: 4,
+    },
+                            score: {
+                                fontSize: 12,
+                            fontWeight: 'bold',
+                            marginVertical: 4,
+    },
+                            postMain: {
+                                flex: 1,
+                            padding: 12,
+    },
+                            postHeader: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            marginBottom: 8,
+                            flexWrap: 'wrap',
+    },
+                            postAvatar: {
+                                fontSize: 16,
+                            marginRight: 6,
+    },
+                            postUser: {
+                                fontSize: 12,
+                            fontWeight: '600',
+                            color: '#1f2937',
+    },
+                            karma: {
+                                fontSize: 11,
+                            color: '#9ca3af',
+                            marginLeft: 4,
+    },
+                            postDot: {
+                                fontSize: 12,
+                            color: '#9ca3af',
+                            marginHorizontal: 4,
+    },
+                            postTime: {
+                                fontSize: 11,
+                            color: '#9ca3af',
+    },
+                            postText: {
+                                fontSize: 14,
+                            color: '#1f2937',
+                            lineHeight: 20,
+                            marginBottom: 8,
+    },
+                            awards: {
+                                flexDirection: 'row',
+                            gap: 4,
+                            marginBottom: 8,
+    },
+                            awardIcon: {
+                                fontSize: 16,
+    },
+                            postActions: {
+                                flexDirection: 'row',
+                            gap: 16,
+                            marginTop: 4,
+    },
+                            actionButton: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+    },
+                            actionText: {
+                                fontSize: 12,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+                            commentsSection: {
+                                marginTop: 12,
+                            paddingTop: 12,
+                            borderTopWidth: 1,
+                            borderTopColor: '#e5e7eb',
+    },
+                            noComments: {
+                                fontSize: 13,
+                            color: '#9ca3af',
+                            fontStyle: 'italic',
+                            textAlign: 'center',
+                            paddingVertical: 12,
+    },
+                            commentsList: {
+                                gap: 8,
+    },
+                            commentWrapper: {
+                                flexDirection: 'row',
+                            marginBottom: 8,
+    },
+                            nestedComment: {
+                                marginLeft: 20,
+    },
+                            commentVoteBar: {
+                                width: 2,
+                            backgroundColor: '#e5e7eb',
+                            marginRight: 8,
+    },
+                            commentContainer: {
+                                flex: 1,
+    },
+                            commentHeader: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            marginBottom: 4,
+                            flexWrap: 'wrap',
+    },
+                            commentAvatar: {
+                                fontSize: 14,
+                            marginRight: 6,
+    },
+                            commentUser: {
+                                fontSize: 12,
+                            fontWeight: '600',
+                            color: '#1f2937',
+    },
+                            commentDot: {
+                                fontSize: 12,
+                            color: '#9ca3af',
+                            marginHorizontal: 4,
+    },
+                            commentTime: {
+                                fontSize: 11,
+                            color: '#9ca3af',
+    },
+                            commentAwards: {
+                                flexDirection: 'row',
+                            gap: 2,
+                            marginLeft: 6,
+    },
+                            commentText: {
+                                fontSize: 13,
+                            color: '#4b5563',
+                            lineHeight: 18,
+                            marginBottom: 6,
+    },
+                            commentActions: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+    },
+                            commentVoteButton: {
+                                padding: 2,
+    },
+                            commentScore: {
+                                fontSize: 12,
+                            fontWeight: 'bold',
+    },
+                            replyButton: {
+                                marginLeft: 4,
+    },
+                            replyText: {
+                                fontSize: 12,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+                            repliesContainer: {
+                                marginTop: 8,
+    },
+                            replyInputContainer: {
+                                marginTop: 8,
+                            padding: 8,
+                            backgroundColor: '#f9fafb',
+                            borderRadius: 8,
+    },
+                            replyInput: {
+                                backgroundColor: 'white',
+                            borderRadius: 8,
+                            padding: 8,
+                            fontSize: 13,
+                            maxHeight: 80,
+                            borderWidth: 1,
+                            borderColor: '#e5e7eb',
+                            marginBottom: 8,
+    },
+                            replyActions: {
+                                flexDirection: 'row',
+                            justifyContent: 'flex-end',
+                            gap: 8,
+    },
+                            cancelButton: {
+                                fontSize: 13,
+                            fontWeight: '600',
+                            color: '#6b7280',
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+    },
+                            replySubmitButton: {
+                                paddingHorizontal: 16,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            backgroundColor: '#16a34a',
+    },
+                            replySubmitText: {
+                                fontSize: 13,
+                            fontWeight: '600',
+                            color: 'white',
+    },
+                            addCommentSection: {
+                                flexDirection: 'row',
+                            gap: 8,
+                            paddingTop: 12,
+                            marginTop: 12,
+                            borderTopWidth: 1,
+                            borderTopColor: '#e5e7eb',
+    },
+                            commentInput: {
+                                flex: 1,
+                            backgroundColor: '#f9fafb',
+                            borderRadius: 20,
+                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                            fontSize: 13,
+                            maxHeight: 80,
+                            borderWidth: 1,
+                            borderColor: '#e5e7eb',
+    },
+                            sendButton: {
+                                width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#16a34a',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+    },
+                            fab: {
+                                position: 'absolute',
+                            right: 20,
+                            bottom: 20,
+                            width: 56,
+                            height: 56,
+                            borderRadius: 28,
+                            backgroundColor: '#16a34a',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            shadowColor: '#000',
+                            shadowOffset: {width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                            elevation: 8,
+    },
+                            modalContainer: {
+                                flex: 1,
+                            justifyContent: 'flex-end',
+                            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+                            modalContent: {
+                                backgroundColor: 'white',
+                            borderTopLeftRadius: 24,
+                            borderTopRightRadius: 24,
+                            padding: 20,
+                            minHeight: 300,
+    },
+                            modalHeader: {
+                                flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 20,
+    },
+                            modalTitle: {
+                                fontSize: 20,
+                            fontWeight: 'bold',
+                            color: '#1f2937',
+    },
+                            postInput: {
+                                backgroundColor: '#f9fafb',
+                            borderRadius: 12,
+                            padding: 16,
+                            fontSize: 15,
+                            minHeight: 120,
+                            textAlignVertical: 'top',
+                            borderWidth: 1,
+                            borderColor: '#e5e7eb',
+                            marginBottom: 16,
+    },
+                            postButton: {
+                                backgroundColor: '#16a34a',
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center',
+    },
+                            postButtonText: {
+                                color: 'white',
+                            fontSize: 16,
+                            fontWeight: '600',
+    },
+                            awardModalContainer: {
+                                flex: 1,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+                            awardModalContent: {
+                                backgroundColor: 'white',
+                            borderRadius: 16,
+                            padding: 24,
+                            width: '80%',
+                            maxWidth: 300,
+    },
+                            awardModalTitle: {
+                                fontSize: 18,
+                            fontWeight: 'bold',
+                            color: '#1f2937',
+                            marginBottom: 20,
+                            textAlign: 'center',
+    },
+                            awardGrid: {
+                                flexDirection: 'row',
+                            flexWrap: 'wrap',
+                            justifyContent: 'center',
+                            gap: 12,
+                            marginBottom: 20,
+    },
+                            awardOption: {
+                                width: 60,
+                            height: 60,
+                            borderRadius: 12,
+                            backgroundColor: '#f9fafb',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 2,
+                            borderColor: '#e5e7eb',
+    },
+                            awardOptionIcon: {
+                                fontSize: 32,
+    },
+                            awardCancelButton: {
+                                paddingVertical: 12,
+                            alignItems: 'center',
+    },
+                            awardCancelText: {
+                                fontSize: 14,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+                            // New modern features styles
+                            postBadges: {
+                                flexDirection: 'row',
+                            gap: 8,
+                            marginBottom: 8,
+    },
+                            pinnedBadge: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            backgroundColor: '#dcfce7',
+                            borderRadius: 4,
+    },
+                            pinnedText: {
+                                fontSize: 10,
+                            fontWeight: '700',
+                            color: '#16a34a',
+                            letterSpacing: 0.5,
+    },
+                            trendingBadge: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            backgroundColor: '#fef3c7',
+                            borderRadius: 4,
+    },
+                            trendingText: {
+                                fontSize: 10,
+                            fontWeight: '700',
+                            color: '#f59e0b',
+                            letterSpacing: 0.5,
+    },
+                            postFlair: {
+                                alignSelf: 'flex-start',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 12,
+                            marginBottom: 8,
+    },
+                            postFlairText: {
+                                fontSize: 11,
+                            fontWeight: '600',
+    },
+                            userFlair: {
+                                paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 8,
+                            marginLeft: 6,
+    },
+                            userFlairText: {
+                                fontSize: 10,
+                            fontWeight: '600',
+    },
+                            reactionsBar: {
+                                flexDirection: 'row',
+                            gap: 6,
+                            marginTop: 8,
+                            marginBottom: 4,
+    },
+                            reactionBubble: {
+                                flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            backgroundColor: '#f3f4f6',
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: '#e5e7eb',
+    },
+                            reactionBubbleActive: {
+                                backgroundColor: '#dcfce7',
+                            borderColor: '#16a34a',
+    },
+                            reactionEmoji: {
+                                fontSize: 14,
+    },
+                            reactionCount: {
+                                fontSize: 12,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+                            addReactionButton: {
+                                width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            backgroundColor: '#f3f4f6',
+                            borderWidth: 1,
+                            borderColor: '#e5e7eb',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+    },
+                            addReactionText: {
+                                fontSize: 16,
+                            fontWeight: '600',
+                            color: '#6b7280',
+    },
+});

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ArborMobile",
-    "slug": "ArborMobile",
+    "name": "Arbor",
+    "slug": "Arbor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,10 +21,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.jaiharishd.arbor"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "739816eb-f94f-4fb6-a4ff-bd0492906a0a"
+      }
     }
   }
 }

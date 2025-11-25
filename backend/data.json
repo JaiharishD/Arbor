@@ -1,0 +1,100 @@
+{
+  "crops": [
+    {
+      "id": "1",
+      "name": "Tomato",
+      "stage": "Flowering",
+      "progress": 65,
+      "nextAction": "Water in 2 days",
+      "image": "🍅"
+    },
+    {
+      "id": "2",
+      "name": "Basil",
+      "stage": "Ready to Harvest",
+      "progress": 90,
+      "nextAction": "Harvest leaves",
+      "image": "🌿"
+    },
+    {
+      "id": "3",
+      "name": "Aloe Vera",
+      "stage": "Growing",
+      "progress": 30,
+      "nextAction": "Check soil moisture",
+      "image": "🌵"
+    },
+    {
+      "id": "1763835697804",
+      "name": "Orange",
+      "image": "🌱",
+      "nextAction": "Water in 1 day",
+      "progress": 0,
+      "stage": "Seedling"
+    }
+  ],
+  "posts": [
+    {
+      "id": "1",
+      "user": "GreenThumb99",
+      "avatar": "👩‍🌾",
+      "text": "Just harvested my first batch of cherry tomatoes! They are so sweet. 🍅 #gardening #harvest",
+      "likes": 24,
+      "comments": 5
+    },
+    {
+      "id": "2",
+      "user": "PlantDad",
+      "avatar": "👨‍🌾",
+      "text": "Does anyone know why my basil leaves are turning yellow? I water them every day.",
+      "likes": 12,
+      "comments": 8
+    },
+    {
+      "id": "3",
+      "user": "UrbanFarmer",
+      "avatar": "🏙️",
+      "text": "Started my vertical garden today! Can't wait to see how it turns out. 🌱",
+      "likes": 45,
+      "comments": 12
+    }
+  ],
+  "marketplace": [
+    {
+      "id": "1",
+      "name": "Organic Fertilizer",
+      "price": "$15",
+      "seller": "EcoStore",
+      "distance": "2.5 km",
+      "image": "🧴",
+      "type": "Sale"
+    },
+    {
+      "id": "2",
+      "name": "Monstera Cutting",
+      "price": "Swap",
+      "seller": "PlantLover",
+      "distance": "1.2 km",
+      "image": "🌿",
+      "type": "Swap"
+    },
+    {
+      "id": "3",
+      "name": "Ceramic Pots",
+      "price": "$20",
+      "seller": "PotteryBarn",
+      "distance": "5.0 km",
+      "image": "🏺",
+      "type": "Sale"
+    },
+    {
+      "id": "4",
+      "name": "Garden Trowel",
+      "price": "$8",
+      "seller": "ToolShed",
+      "distance": "3.1 km",
+      "image": "🛠️",
+      "type": "Sale"
+    }
+  ]
+}
